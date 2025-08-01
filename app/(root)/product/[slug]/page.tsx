@@ -1,10 +1,12 @@
+import AddToCart from "@/components/shared/products/add-to-cart";
 import ProductImages from "@/components/shared/products/product-images";
 import ProductPrice from "@/components/shared/products/product-price";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { getMyCart } from "@/lib/actions/cart.actions";
 import { getProductBySlug } from "@/lib/actions/product.actions";
 import { notFound } from "next/navigation";
+
 import React from "react";
 
 interface IProps {
@@ -17,6 +19,7 @@ const ProductDetailsPage = async ({ params }: IProps) => {
   if (!product) notFound();
   const {
     brand,
+    id,
     category,
     description,
     images,
@@ -26,6 +29,8 @@ const ProductDetailsPage = async ({ params }: IProps) => {
     stock,
     numReviews,
   } = product;
+
+  const cart = await getMyCart();
 
   return (
     <>
@@ -70,16 +75,25 @@ const ProductDetailsPage = async ({ params }: IProps) => {
                 <div className="mb-2 flex justify-between">
                   <div>Status</div>
                   {stock > 0 ? (
-                    <Badge variant={"secondary"}>In Stock</Badge>
+                    <Badge variant={"secondary"}>{stock} In Stock</Badge>
                   ) : (
                     <Badge variant={"destructive"}>Out Of Stock</Badge>
                   )}
                 </div>
                 {stock > 0 && (
                   <div className="flex-center">
-                    <Button className="w-full cursor-pointer">
-                      Add To Cart
-                    </Button>
+                    {/* Add to cart component */}
+                    <AddToCart
+                      cart={cart}
+                      item={{
+                        name: name,
+                        slug: product.slug,
+                        image: images![0],
+                        price: price,
+                        qty: 1,
+                        productId: id,
+                      }}
+                    />
                   </div>
                 )}
               </CardContent>

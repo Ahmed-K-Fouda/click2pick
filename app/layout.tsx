@@ -4,6 +4,8 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import { Toaster } from "@/components/ui/sonner";
+import AuthGuard from "@/components/shared/auth/auth-guard";
+
 const inter = Inter({
   subsets: ["latin"],
 });
@@ -31,7 +33,9 @@ export default function RootLayout({
           enableSystem
           defaultTheme="light"
         >
-          {children}
+          <AuthGuard>
+            {children}
+          </AuthGuard>
           <Toaster />
         </ThemeProvider>
       </body>

@@ -1,43 +1,53 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { auth } from "@/auth";
 
-export default auth((req) => {
-  const isLoggedIn = !!req.auth;
-  const { nextUrl } = req;
-
+export function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+  
   // Protected routes that require authentication
   const protectedRoutes = [
     "/shipping-address",
-    "/checkout",
+    "/checkout", 
     "/orders",
     "/profile",
+    "/payment-method",
+    "/place-order",
   ];
 
   // Check if the current path is a protected route
   const isProtectedRoute = protectedRoutes.some((route) =>
-    nextUrl.pathname.startsWith(route)
+    pathname.startsWith(route)
   );
 
-  // If user is not logged in and trying to access protected route
-  if (!isLoggedIn && isProtectedRoute) {
-    const signInUrl = new URL("/sign-in", nextUrl.origin);
-    signInUrl.searchParams.set("callbackUrl", nextUrl.pathname);
-    return NextResponse.redirect(signInUrl);
-  }
-
-  // If user is logged in and trying to access auth pages, redirect to home
-  if (
-    isLoggedIn &&
-    (nextUrl.pathname.startsWith("/sign-in") ||
-      nextUrl.pathname.startsWith("/sign-up"))
-  ) {
-    return NextResponse.redirect(new URL("/", nextUrl.origin));
+  // Check for session cart cookie and create if not exists
+  const sessionCartId = request.cookies.get("sessionCartId");
+  
+  if (!sessionCartId) {
+    const response = NextResponse.next();
+    const newSessionCartId = crypto.randomUUID();
+    
+    response.cookies.set("sessionCartId", newSessionCartId, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 30 * 24 * 60 * 60, // 30 days
+    });
+    
+    return response;
   }
 
   return NextResponse.next();
-});
+}
 
 export const config = {
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
+  matcher: [
+    /*
+     * Match all request paths except for the ones starting with:
+     * - api (API routes)
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     */
+    "/((?!api|_next/static|_next/image|favicon.ico).*)",
+  ],
 };

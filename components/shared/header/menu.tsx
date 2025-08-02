@@ -1,7 +1,8 @@
 import { Button } from "@/components/ui/button";
 import ModeToggle from "./mode-toggle";
 import UserButton from "./user-button";
-import { EllipsisVertical, ShoppingCart } from "lucide-react";
+import CartIndicator from "./cart-indicator";
+import { EllipsisVertical } from "lucide-react";
 import Link from "next/link";
 import {
   Sheet,
@@ -11,14 +12,16 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+
 function Menu() {
   return (
     <div className="flex justify-end gap-3">
       <nav className="hidden md:flex w-full max-w-xs gap-1">
         <ModeToggle />
         <Button asChild variant={"ghost"}>
-          <Link href="/cart">
-            <ShoppingCart /> Cart
+          <Link href="/cart" className="relative">
+            <CartIndicator />
+            <span className="ml-2">Cart</span>
           </Link>
         </Button>
         <UserButton />
@@ -34,9 +37,9 @@ function Menu() {
               <SheetTitle>Menu</SheetTitle>
               <ModeToggle />
               <Button asChild variant="ghost">
-                <Link href="/cart">
-                  <ShoppingCart />
-                  Cart
+                <Link href="/cart" className="relative">
+                  <CartIndicator />
+                  <span className="ml-2">Cart</span>
                 </Link>
               </Button>
               <UserButton />

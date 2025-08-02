@@ -6,6 +6,8 @@ import { compareSync } from "bcrypt-ts-edge";
 import type { NextAuthConfig } from "next-auth";
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { mergeGuestCartWithUser } from "@/lib/actions/cart.actions";
+
 export const config = {
   session: {
     strategy: "jwt",
@@ -71,6 +73,7 @@ export const config = {
     async jwt({ token, user, session, trigger }: any) {
       // assign user field to token
       if (user) {
+        token.id = user.id;
         token.role = user.role;
 
         // if user has no name
@@ -83,12 +86,41 @@ export const config = {
             data: { name: token.name },
           });
         }
+
+        // Enhanced cart merging logic for sign in/sign up
+        if (trigger === "signIn" || trigger === "signUp") {
+          try {
+            await mergeGuestCartWithUser(user.id);
+          } catch (error) {
+            console.error("Error merging guest cart:", error);
+          }
+        }
       }
+
+      if (session?.user.name && trigger === "update") {
+        token.name = session.user.name;
+      }
+
       return token;
     },
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     authorized({ request, auth }: any) {
+      // protect path with regex
+      const protectedPath = [
+        /\/shipping-address/,
+        /\/payment-method/,
+        /\/place-order/,
+        /\/profile/,
+        /\/user\/(.*)/,
+        /\/order\/(.*)/,
+        /\/admin/,
+      ];
+      // get path name from req url obj
+      const { pathname } = request.nextUrl;
+
+      // check if user not authenticated and access prtotect path
+      if (!auth && protectedPath.some((p) => p.test(pathname))) return false;
       // check for session cart cookie
       if (!request.cookies.get("sessionCartId")) {
         // generate new session cart id cookie
@@ -103,7 +135,12 @@ export const config = {
         });
 
         // set new genrated session cart id in res session
-        response.cookies.set("sessionCartId", sessionCartId);
+        response.cookies.set("sessionCartId", sessionCartId, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === "production",
+          sameSite: "lax",
+          maxAge: 30 * 24 * 60 * 60, // 30 days
+        });
         return response;
       } else {
         return true;

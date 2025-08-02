@@ -1,10 +1,16 @@
 "use server";
-import { signInFormSchema, signUpFormSchema } from "../validation/validators";
-import { signIn, signOut } from "@/auth";
+import {
+  shippingAddressSchema,
+  signInFormSchema,
+  signUpFormSchema,
+} from "../validation/validators";
+import { auth, signIn, signOut } from "@/auth";
 import { prisma } from "@/db/prisma";
 import { hashSync } from "bcrypt-ts-edge";
 import { isRedirectError } from "next/dist/client/components/redirect-error";
 import { formatError } from "../utils";
+import { ShippingAddress } from "@/types";
+import { redirect } from "next/navigation";
 
 // Sign in user with credentials
 export async function signInWithCredentials(
@@ -16,8 +22,16 @@ export async function signInWithCredentials(
       email: formData.get("email"),
       password: formData.get("password"),
     });
-    await signIn("credentials", user);
-    return { success: true, message: "Signed in successfully" };
+    
+    const callbackUrl = formData.get("callbackUrl") as string;
+    
+    await signIn("credentials", {
+      ...user,
+      redirect: false,
+    });
+    
+    // Redirect to callback URL or home page
+    redirect(callbackUrl || "/");
   } catch (error) {
     if (isRedirectError(error)) {
       throw error;
@@ -40,8 +54,11 @@ export async function signUpUser(prevState: unknown, formData: FormData) {
       password: formData.get("password"),
       confirmPassword: formData.get("confirmPassword"),
     });
+    
+    const callbackUrl = formData.get("callbackUrl") as string;
     const plainPassword = user.password;
     user.password = hashSync(user.password, 10);
+    
     await prisma.user.create({
       data: {
         name: user.name,
@@ -53,12 +70,46 @@ export async function signUpUser(prevState: unknown, formData: FormData) {
     await signIn("credentials", {
       email: user.email,
       password: plainPassword,
+      redirect: false,
     });
-    return { success: true, message: "User registered successfully" };
+    
+    // Redirect to callback URL or home page
+    redirect(callbackUrl || "/");
   } catch (error) {
     if (isRedirectError(error)) {
       throw error;
     }
+    return { success: false, message: formatError(error) };
+  }
+}
+
+// GET user by ID
+export async function getUserById(userId: string) {
+  const user = await prisma.user.findFirst({
+    where: { id: userId },
+  });
+  if (!user) throw new Error("User not found");
+  return user;
+}
+
+// UPDATE User address
+export async function updateUserAddress(data: ShippingAddress) {
+  try {
+    const session = await auth();
+    const currentUser = await prisma.user.findFirst({
+      where: { id: session?.user?.id },
+    });
+
+    if (!currentUser) throw new Error("User Not Found!");
+    const address = shippingAddressSchema.parse(data);
+
+    await prisma.user.update({
+      where: { id: currentUser.id },
+      data: { address },
+    });
+
+    return { success: true, message: "User updated successfully" };
+  } catch (error) {
     return { success: false, message: formatError(error) };
   }
 }

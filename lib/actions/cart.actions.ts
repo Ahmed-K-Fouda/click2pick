@@ -10,7 +10,6 @@ import { revalidatePath } from "next/cache";
 import { Prisma } from "@prisma/client";
 
 // calc cart price
-
 const calcPrice = (items: CartItems[]) => {
   const itemPrice = round2(
     items.reduce((acc, item) => acc + Number(item.price) * item.qty, 0)
@@ -25,6 +24,25 @@ const calcPrice = (items: CartItems[]) => {
     taxPrice: taxPrice.toFixed(2),
     totalPrice: totalPrice.toFixed(2),
   };
+};
+
+// Merge cart items intelligently
+const mergeCartItems = (existingItems: CartItems[], newItems: CartItems[]): CartItems[] => {
+  const mergedItems = [...existingItems];
+  
+  newItems.forEach(newItem => {
+    const existingItemIndex = mergedItems.findIndex(item => item.productId === newItem.productId);
+    
+    if (existingItemIndex !== -1) {
+      // Item exists, update quantity
+      mergedItems[existingItemIndex].qty += newItem.qty;
+    } else {
+      // Item doesn't exist, add it
+      mergedItems.push(newItem);
+    }
+  });
+  
+  return mergedItems;
 };
 
 // add item to cart fun
@@ -188,6 +206,96 @@ export async function removeItemFromCart(productId: string) {
       success: true,
       message: `${product.name} Was removed from cart successfully!`,
     };
+  } catch (error) {
+    return { success: false, message: formatError(error) };
+  }
+}
+
+// New function to merge guest cart with user cart after registration
+export async function mergeGuestCartWithUser(userId: string) {
+  try {
+    const sessionCartId = (await cookies()).get("sessionCartId")?.value;
+    if (!sessionCartId) return { success: true, message: "No guest cart to merge" };
+
+    // Get guest cart
+    const guestCart = await prisma.cart.findFirst({
+      where: { sessionCartId, userId: null },
+    });
+
+    if (!guestCart) return { success: true, message: "No guest cart found" };
+
+    // Get user's existing cart
+    const userCart = await prisma.cart.findFirst({
+      where: { userId },
+    });
+
+    if (!userCart) {
+      // User has no cart, simply assign guest cart to user
+      await prisma.cart.update({
+        where: { id: guestCart.id },
+        data: { userId },
+      });
+      return { success: true, message: "Guest cart assigned to user" };
+    }
+
+    // Merge cart items
+    const mergedItems = mergeCartItems(
+      userCart.items as CartItems[],
+      guestCart.items as CartItems[]
+    );
+
+    // Update user cart with merged items
+    await prisma.cart.update({
+      where: { id: userCart.id },
+      data: {
+        items: mergedItems as Prisma.CartUpdateitemsInput[],
+        ...calcPrice(mergedItems),
+      },
+    });
+
+    // Delete guest cart
+    await prisma.cart.delete({
+      where: { id: guestCart.id },
+    });
+
+    return { success: true, message: "Guest cart merged with user cart" };
+  } catch (error) {
+    return { success: false, message: formatError(error) };
+  }
+}
+
+// New function to check if user is authenticated
+export async function isUserAuthenticated() {
+  const session = await auth();
+  return !!session?.user?.id;
+}
+
+// New function to get cart item count
+export async function getCartItemCount() {
+  try {
+    const cart = await getMyCart();
+    if (!cart) return 0;
+    
+    return (cart.items as CartItems[]).reduce((acc, item) => acc + item.qty, 0);
+  } catch (error) {
+    return 0;
+  }
+}
+
+// New function to clear cart
+export async function clearCart() {
+  try {
+    const sessionCartId = (await cookies()).get("sessionCartId")?.value;
+    if (!sessionCartId) throw new Error("Can't find cart session");
+
+    const session = await auth();
+    const userId = session?.user?.id ? (session.user.id as string) : undefined;
+
+    await prisma.cart.deleteMany({
+      where: userId ? { userId } : { sessionCartId },
+    });
+
+    return { success: true, message: "Cart cleared successfully" };
   } catch (error) {
     return { success: false, message: formatError(error) };
   }

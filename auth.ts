@@ -86,7 +86,7 @@ export const config = {
             data: { name: token.name },
           });
         }
-        
+
         // Enhanced cart merging logic for sign in/sign up
         if (trigger === "signIn" || trigger === "signUp") {
           try {
@@ -97,6 +97,11 @@ export const config = {
         }
       }
 
+      if (session?.user.name && trigger === "update") {
+        token.name = session.user.name;
+      }
+
+      // handle session update
       if (session?.user.name && trigger === "update") {
         token.name = session.user.name;
       }
@@ -121,7 +126,7 @@ export const config = {
 
       // check if user not authenticated and access prtotect path
       if (!auth && protectedPath.some((p) => p.test(pathname))) return false;
-      
+
       // check for session cart cookie
       if (!request.cookies.get("sessionCartId")) {
         // generate new session cart id cookie
